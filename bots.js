@@ -259,7 +259,8 @@ function loginBot(name, id) {
         
         // Only auto-reconnect if NOT manually disconnected
         if (!manualDisconnect[id-1]) {
-            const retryDelay = 5000 + Math.random() * 5000; 
+            // AntiBot bypass: Staggered reconnection with longer random delay
+            const retryDelay = 15000 + Math.random() * 15000; 
             setTimeout(() => loginBot(name, id), retryDelay);
         }
     });
@@ -269,7 +270,7 @@ function loginBot(name, id) {
 BOTS.forEach((name, i) => {
     setTimeout(() => {
         loginBot(name, i + 1);
-    }, i * 3000); // 3 second delay between each bot
+    }, i * 15000); // 15 second delay between each bot to bypass AntiBot
 });
 
 // 🌐 WEB API

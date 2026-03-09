@@ -15,8 +15,8 @@ const server = net.createServer((localSocket) => {
     const ws = new WebSocket(REMOTE_URL);
 
     ws.on('open', () => {
-        // Step 1: Send configuration
-        ws.send(JSON.stringify({ host: 'eternel.eu', port: 25565 }));
+        // Tell the remote server we want to connect to the REAL Minecraft host (java.eternel.eu)
+        ws.send(JSON.stringify({ host: 'java.eternel.eu', port: 25565 }));
     });
 
     ws.on('message', (data) => {

@@ -667,36 +667,45 @@ server.on('upgrade', (request, socket, head) => {
 
 wss.on('connection', (ws) => {
     let client = null;
+    let queue = [];
 
     ws.on('message', (message) => {
         // First message is expected to be {host, port}
         if (!client) {
             try {
                 const config = JSON.parse(message.toString());
+                addLog(`🌐 PROXY: Attempting connection to ${config.host}:${config.port}...`, 'SYSTEM');
+                
                 client = net.connect(config.port, config.host, () => {
                     ws.send(JSON.stringify({ type: 'connected' }));
+                    // Flush the queue
+                    while (queue.length > 0) {
+                        client.write(queue.shift());
+                    }
                 });
 
                 client.on('data', (data) => {
                     if (ws.readyState === ws.OPEN) ws.send(data);
                 });
 
-                client.on('end', () => {
-                    ws.close();
-                });
-
+                client.on('end', () => ws.close());
                 client.on('error', (err) => {
                     ws.send(JSON.stringify({ type: 'error', message: err.message }));
                     ws.close();
                 });
             } catch (e) {
-                ws.close();
+                // If not JSON, it's early Minecraft data, queue it
+                queue.push(message);
             }
             return;
         }
 
-        // Subsequent messages are raw TCP data
-        if (client.writable) client.write(message);
+        // Subsequent messages
+        if (client.readyState === 'open') {
+            client.write(message);
+        } else {
+            queue.push(message);
+        }
     });
 
     ws.on('close', () => {

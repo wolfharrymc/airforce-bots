@@ -642,7 +642,8 @@ app.post('/bot/:id/stop', (req, res) => {
     res.status(400).json({ error: 'Bot offline' });
 });
 
-server.listen(3000, () => {
-    console.log('🌐 DASHBOARD: http://localhost:3000');
+const WEB_PORT = process.env.PORT || 3000;
+server.listen(WEB_PORT, () => {
+    console.log(`🌐 DASHBOARD: http://localhost:${WEB_PORT}`);
     console.log('📊 WebSocket Stream Active');
 });

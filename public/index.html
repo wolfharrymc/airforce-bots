@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>🐺 WOLFBOT | TERMINAL</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body {
+            background-color: #000;
+            color: #00ff41;
+            font-family: 'JetBrains Mono', monospace;
+            overflow-x: hidden;
+        }
+        .hacker-border {
+            border: 1px solid #00ff41;
+            background: rgba(0, 20, 0, 0.9);
+        }
+        .hacker-input {
+            background: #000;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            color: #00ff41;
+            padding: 8px;
+            outline: none;
+        }
+        .hacker-input:focus {
+            border-color: #00ff41;
+            box-shadow: 0 0 5px #00ff41;
+        }
+        .hacker-btn {
+            border: 1px solid #00ff41;
+            padding: 8px 16px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .hacker-btn:hover {
+            background: #00ff41;
+            color: #000;
+        }
+        .stat-bar {
+            height: 4px;
+            background: #111;
+            margin-top: 2px;
+        }
+        .stat-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #00ff41; }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-green-500 pb-4 mb-6">
+        <div>
+            <h1 class="text-3xl font-bold tracking-tighter uppercase">Swarm Terminal</h1>
+            <p class="text-[10px] opacity-60 mt-1">SYSTEM_VERSION: 5.0.0-LITE</p>
+        </div>
+        <div class="text-right text-[10px] mt-4 md:mt-0 space-y-1">
+            <p>NODE: <span id="nodeStatus" class="text-green-400">CONNECTED</span></p>
+            <p>SWARM_SIZE: <span id="aliveCount" class="text-green-400">0/0</span></p>
+            <p>SESSION_TIME: <span id="uptimeCounter" class="text-green-400">00:00:00</span></p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Main Grid -->
+        <div class="lg:col-span-3 space-y-6">
+            <div id="botPanel" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+            
+            <!-- Global Broadcast -->
+            <div class="hacker-border p-4">
+                <h2 class="text-xs font-bold mb-3 uppercase tracking-widest">Global Broadcast Override</h2>
+                <div class="flex gap-2">
+                    <input type="text" id="allInput" class="hacker-input flex-1 text-sm" placeholder="COMMAND_TO_ALL_UNITS...">
+                    <button onclick="sendAll()" class="hacker-btn">Broadcast</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Navigator -->
+            <div class="hacker-border p-4">
+                <h3 class="text-[10px] font-bold opacity-60 mb-4 uppercase">Tactical Nav</h3>
+                
+                <div class="grid grid-cols-3 gap-1 mb-4 max-w-[150px] mx-auto">
+                    <div class="col-start-2"><button onclick="moveBot('up')" class="w-full h-10 hacker-border flex items-center justify-center hover:bg-green-500 hover:text-black">▲</button></div>
+                    <div class="col-start-1 row-start-2"><button onclick="moveBot('left')" class="w-full h-10 hacker-border flex items-center justify-center hover:bg-green-500 hover:text-black">◀</button></div>
+                    <div class="col-start-2 row-start-2"><button onclick="moveBot('jump')" class="w-full h-10 hacker-border flex items-center justify-center hover:bg-green-500 hover:text-black text-[10px]">JUMP</button></div>
+                    <div class="col-start-3 row-start-2"><button onclick="moveBot('right')" class="w-full h-10 hacker-border flex items-center justify-center hover:bg-green-500 hover:text-black">▶</button></div>
+                    <div class="col-start-2 row-start-3"><button onclick="moveBot('down')" class="w-full h-10 hacker-border flex items-center justify-center hover:bg-green-500 hover:text-black">▼</button></div>
+                </div>
+
+                <div class="space-y-3">
+                    <select id="botMoveSelect" class="hacker-input w-full text-xs"></select>
+                    
+                    <div class="border-t border-green-900 pt-3 space-y-2">
+                        <input id="followPlayer" type="text" class="hacker-input w-full text-xs" placeholder="FOLLOW_PLAYER...">
+                        <div class="flex gap-1">
+                            <button onclick="followBot('follow')" class="hacker-btn flex-1 py-1 text-[10px]">Follow</button>
+                            <button onclick="followBot('stop')" class="hacker-btn flex-1 py-1 text-[10px] border-red-500 text-red-500">Stop</button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-green-900 pt-3 space-y-2">
+                        <input id="attackTarget" type="text" class="hacker-input w-full text-xs border-red-900" placeholder="ATTACK_PLAYER...">
+                        <button onclick="attackTarget()" class="hacker-btn w-full py-1 text-[10px] border-red-500 text-red-500 hover:bg-red-500">Attack</button>
+                    </div>
+
+                    <div class="border-t border-green-900 pt-3 space-y-2">
+                        <input id="mineBlock" type="text" class="hacker-input w-full text-xs border-yellow-900" placeholder="MINE_BLOCK_ID...">
+                        <button onclick="mineBlock()" class="hacker-btn w-full py-1 text-[10px] border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black">Mine</button>
+                    </div>
+
+                    <button onclick="stopAll()" class="w-full hacker-btn border-red-600 bg-red-900/20 text-red-500 mt-2">Emergency Stop</button>
+                </div>
+            </div>
+
+            <!-- Logs -->
+            <div class="hacker-border h-[400px] flex flex-col overflow-hidden">
+                <div class="p-2 border-b border-green-900 text-[10px] font-bold flex justify-between uppercase">
+                    <span>Log Stream</span>
+                    <span id="logClock">00:00:00</span>
+                </div>
+                <div id="logs" class="flex-1 overflow-y-auto p-3 text-[10px] space-y-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let startTime = Date.now();
+
+        // UI Helpers
+        function updateClock() {
+            const diff = Math.floor((Date.now() - startTime) / 1000);
+            const h = String(Math.floor(diff / 3600)).padStart(2, "0");
+            const m = String(Math.floor((diff % 3600) / 60)).padStart(2, "0");
+            const s = String(diff % 60).padStart(2, "0");
+            document.getElementById("uptimeCounter").innerText = `${h}:${m}:${s}`;
+            document.getElementById("logClock").innerText = new Date().toLocaleTimeString();
+        }
+        setInterval(updateClock, 1000);
+
+        function renderBotCard(bot) {
+            const panel = document.getElementById("botPanel");
+            let card = document.getElementById(`bot-${bot.id}`);
+            if (!card) {
+                card = document.createElement("div");
+                card.id = `bot-${bot.id}`;
+                card.className = "hacker-border p-3 transition-all";
+                panel.appendChild(card);
+            }
+
+            const statusColor = bot.alive ? 'text-green-400' : 'text-red-500';
+            const connBtn = bot.alive 
+                ? `<button onclick="toggleBot(${bot.id}, 'disconnect')" class="hacker-btn w-full border-red-500 text-red-500 hover:bg-red-500 py-1">Disconnect</button>`
+                : `<button onclick="toggleBot(${bot.id}, 'connect')" class="hacker-btn w-full py-1">Connect</button>`;
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-3">
+                    <span class="font-bold text-sm">${bot.name}</span>
+                    <span class="text-[9px] border border-current px-1 ${statusColor}">${bot.alive ? 'ONLINE' : 'OFFLINE'}</span>
+                </div>
+                <div class="text-[9px] space-y-1 mb-3 opacity-80">
+                    <p>TASK: <span class="text-blue-400 font-bold">${bot.task || 'IDLE'}</span></p>
+                    <p>POS: <span class="text-green-300">${bot.position || 'N/A'}</span></p>
+                    <div class="space-y-1 pt-1">
+                        <div class="flex justify-between"><span>HP</span> <span>${Math.round(bot.health)}/20</span></div>
+                        <div class="stat-bar"><div class="stat-fill bg-red-500" style="width:${(bot.health/20)*100}%"></div></div>
+                        <div class="flex justify-between"><span>FOOD</span> <span>${Math.round(bot.food)}/20</span></div>
+                        <div class="stat-bar"><div class="stat-fill bg-yellow-500" style="width:${(bot.food/20)*100}%"></div></div>
+                    </div>
+                </div>
+                <div class="space-y-1">
+                    <input id="input-${bot.id}" type="text" class="hacker-input w-full text-[10px] py-1" placeholder="CMD...">
+                    <div class="grid grid-cols-2 gap-1">
+                        <button onclick="sendSingle(${bot.id})" class="hacker-btn py-1 text-[9px]">Exec</button>
+                        ${connBtn}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Socket Listeners
+        socket.on('status', (data) => {
+            document.getElementById("aliveCount").innerText = `${data.alive}/${data.total}`;
+            const selector = document.getElementById("botMoveSelect");
+            if (selector.options.length !== data.bots.length + 1) {
+                const prev = selector.value;
+                let options = '<option value="all" style="color:#ff4d4d;">[ ALL_UNITS ]</option>';
+                options += data.bots.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+                selector.innerHTML = options;
+                if (prev) selector.value = prev;
+            }
+            data.bots.forEach(bot => renderBotCard(bot));
+        });
+
+        socket.on('log', (log) => {
+            const logs = document.getElementById("logs");
+            const entry = document.createElement("div");
+            entry.className = "border-l border-green-900 pl-2 py-0.5 opacity-80 hover:opacity-100";
+            
+            let color = "text-green-500";
+            if (log.source === "SERVER") color = "text-white font-bold";
+            else if (log.source.startsWith("WolfBot")) color = "text-yellow-500";
+
+            entry.innerHTML = `<span class="opacity-40 mr-1">${log.time}</span> <span class="${color}">[${log.source}]</span> ${log.msg}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+            if (logs.childNodes.length > 50) logs.removeChild(logs.firstChild);
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById("nodeStatus").innerText = "OFFLINE";
+            document.getElementById("nodeStatus").className = "text-red-500 font-bold";
+        });
+
+        // API Calls
+        async function sendSingle(id) {
+            const input = document.getElementById(`input-${id}`);
+            const msg = input.value.trim();
+            if (!msg) return;
+            input.value = "";
+            fetch(`/chat/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) });
+        }
+
+        async function sendAll() {
+            const input = document.getElementById("allInput");
+            const msg = input.value.trim();
+            if (!msg) return;
+            input.value = "";
+            fetch("/chat-all", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) });
+        }
+
+        async function toggleBot(id, action) {
+            fetch(`/bot/${id}/control`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+        }
+
+        async function moveBot(direction) {
+            const id = document.getElementById("botMoveSelect").value;
+            fetch(`/bot/${id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ direction }) });
+        }
+
+        async function followBot(action) {
+            const id = document.getElementById("botMoveSelect").value;
+            const player = document.getElementById("followPlayer").value.trim();
+            if (action === "follow" && !player) return;
+            fetch(`/bot/${id}/follow`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player, action }) });
+        }
+
+        async function attackTarget() {
+            const id = document.getElementById("botMoveSelect").value;
+            const targetName = document.getElementById("attackTarget").value.trim();
+            if (!targetName) return;
+            fetch(`/bot/${id}/attack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetName }) });
+        }
+
+        async function mineBlock() {
+            const id = document.getElementById("botMoveSelect").value;
+            const blockName = document.getElementById("mineBlock").value.trim();
+            if (!blockName) return;
+            fetch(`/bot/${id}/mine`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blockName }) });
+        }
+
+        async function stopAll() {
+            const id = document.getElementById("botMoveSelect").value;
+            fetch(`/bot/${id}/stop`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        }
+
+        document.addEventListener("keypress", (e) => {
+            if (e.key !== "Enter") return;
+            const active = document.activeElement;
+            if (active && active.id === "allInput") sendAll();
+            else if (active && active.id && active.id.startsWith("input-")) sendSingle(active.id.split("-")[1]);
+        });
+    </script>
+</body>
+</html>

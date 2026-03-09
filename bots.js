@@ -9,7 +9,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const puppeteer = require('puppeteer-core');
+const net = require('net');
 
 const SERVER = 'eternel.eu';
 const PORT = 25565;
@@ -651,55 +651,33 @@ app.post('/bot/:id/stop', (req, res) => {
     res.status(400).json({ error: 'Bot offline' });
 });
 
-// 🌐 BROWSER PROXY (Same IP Verification)
-let activeBrowser = null;
-let activePage = null;
-
+// 🌐 SOCKS5 PROXY OVER WEBSOCKET (Same IP Verification)
+// This allows you to connect your local Minecraft client through the Hugging Face IP
 io.on('connection', (socket) => {
-    socket.on('browser-open', async (url) => {
-        try {
-            if (!activeBrowser) {
-                activeBrowser = await puppeteer.launch({
-                    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-                    headless: "new"
-                });
-            }
-            if (!activePage) {
-                activePage = await activeBrowser.newPage();
-                await activePage.setViewport({ width: 1280, height: 720 });
-            }
-            
-            await activePage.goto(url, { waitUntil: 'networkidle0' });
-            const screenshot = await activePage.screenshot({ encoding: 'base64' });
-            socket.emit('browser-update', { screenshot, url: activePage.url() });
-        } catch (err) {
-            addLog(`❌ BROWSER ERROR: ${err.message}`, 'SYSTEM');
-        }
-    });
+    socket.on('proxy-connect', ({ host, port }) => {
+        const client = net.connect(port, host, () => {
+            socket.emit('proxy-connected');
+        });
 
-    socket.on('browser-click', async ({ x, y }) => {
-        if (activePage) {
-            try {
-                await activePage.mouse.click(x, y);
-                const screenshot = await activePage.screenshot({ encoding: 'base64' });
-                socket.emit('browser-update', { screenshot, url: activePage.url() });
-            } catch (err) {
-                addLog(`❌ CLICK ERROR: ${err.message}`, 'SYSTEM');
-            }
-        }
-    });
+        client.on('data', (data) => {
+            socket.emit('proxy-data', data);
+        });
 
-    socket.on('browser-type', async (text) => {
-        if (activePage) {
-            try {
-                await activePage.keyboard.type(text);
-                const screenshot = await activePage.screenshot({ encoding: 'base64' });
-                socket.emit('browser-update', { screenshot, url: activePage.url() });
-            } catch (err) {
-                addLog(`❌ TYPE ERROR: ${err.message}`, 'SYSTEM');
-            }
-        }
+        client.on('end', () => {
+            socket.emit('proxy-end');
+        });
+
+        client.on('error', (err) => {
+            socket.emit('proxy-error', err.message);
+        });
+
+        socket.on('proxy-input', (data) => {
+            if (client.writable) client.write(data);
+        });
+
+        socket.on('disconnect', () => {
+            client.end();
+        });
     });
 });
 

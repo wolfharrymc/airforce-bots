@@ -86,20 +86,21 @@
 
         <!-- Sidebar -->
         <div class="space-y-6">
-            <!-- Same IP Verification Browser -->
-            <div class="hacker-border p-4">
-                <h3 class="text-[10px] font-bold opacity-60 mb-2 uppercase">Remote Verification Browser (Same IP)</h3>
-                <div class="space-y-2">
-                    <div class="flex gap-1">
-                        <input id="browserUrl" type="text" class="hacker-input flex-1 text-[10px]" placeholder="https://verify.server.eu/..." value="https://google.com">
-                        <button onclick="openBrowser()" class="hacker-btn py-1 px-2 text-[10px]">Go</button>
-                    </div>
-                    <div id="browserContainer" class="hidden">
-                        <div id="browserStatus" class="text-[8px] mb-1 opacity-50">READY</div>
-                        <div class="relative bg-white overflow-hidden cursor-crosshair" style="aspect-ratio: 16/9;">
-                            <img id="browserScreen" class="w-full h-full object-contain" onclick="clickBrowser(event)">
-                        </div>
-                        <input id="browserType" type="text" class="hacker-input w-full text-[10px] mt-2" placeholder="TYPE_HERE..." onkeypress="typeBrowser(event)">
+            <!-- Same IP Verification Tunnel -->
+            <div class="hacker-border p-4 bg-red-900/10 border-red-500">
+                <h3 class="text-[10px] font-bold opacity-60 mb-2 uppercase text-red-400">🚨 Same-IP Verification Tunnel</h3>
+                <p class="text-[8px] mb-3 opacity-70">Use this to connect your local Minecraft to the server via Hugging Face's IP.</p>
+                
+                <div class="space-y-3">
+                    <div class="bg-black/50 p-2 border border-red-900/50 rounded text-[9px] font-mono">
+                        <p class="text-green-400 mb-1">STEP 1: DOWNLOAD CLIENT</p>
+                        <a href="https://github.com/wolfharrymc/airforce-bots/releases/download/v1/proxy-client.exe" class="text-blue-400 underline block mb-2">Download Tunnel Client (Windows)</a>
+                        
+                        <p class="text-green-400 mb-1">STEP 2: RUN COMMAND</p>
+                        <code class="block bg-black p-1 text-white select-all">./proxy-client.exe --remote https://wolfharrymc-airforce-bots.hf.space</code>
+                        
+                        <p class="text-green-400 mt-2 mb-1">STEP 3: CONNECT IN GAME</p>
+                        <p class="text-white">Join Server: <span class="text-yellow-400">localhost:25565</span></p>
                     </div>
                 </div>
             </div>
@@ -240,34 +241,6 @@
             document.getElementById("nodeStatus").innerText = "OFFLINE";
             document.getElementById("nodeStatus").className = "text-red-500 font-bold";
         });
-
-        // Browser Proxy Handlers
-        function openBrowser() {
-            const url = document.getElementById('browserUrl').value;
-            if (!url) return;
-            document.getElementById('browserContainer').classList.remove('hidden');
-            document.getElementById('browserStatus').innerText = 'LOADING...';
-            socket.emit('browser-open', url);
-        }
-
-        socket.on('browser-update', (data) => {
-            document.getElementById('browserScreen').src = `data:image/png;base64,${data.screenshot}`;
-            document.getElementById('browserStatus').innerText = `CURRENT: ${data.url}`;
-        });
-
-        function clickBrowser(e) {
-            const rect = e.target.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (1280 / rect.width);
-            const y = (e.clientY - rect.top) * (720 / rect.height);
-            socket.emit('browser-click', { x, y });
-        }
-
-        function typeBrowser(e) {
-            if (e.key === 'Enter') {
-                socket.emit('browser-type', e.target.value);
-                e.target.value = '';
-            }
-        }
 
         // API Calls
         async function sendSingle(id) {

@@ -86,6 +86,24 @@
 
         <!-- Sidebar -->
         <div class="space-y-6">
+            <!-- Same IP Verification Browser -->
+            <div class="hacker-border p-4">
+                <h3 class="text-[10px] font-bold opacity-60 mb-2 uppercase">Remote Verification Browser (Same IP)</h3>
+                <div class="space-y-2">
+                    <div class="flex gap-1">
+                        <input id="browserUrl" type="text" class="hacker-input flex-1 text-[10px]" placeholder="https://verify.server.eu/..." value="https://google.com">
+                        <button onclick="openBrowser()" class="hacker-btn py-1 px-2 text-[10px]">Go</button>
+                    </div>
+                    <div id="browserContainer" class="hidden">
+                        <div id="browserStatus" class="text-[8px] mb-1 opacity-50">READY</div>
+                        <div class="relative bg-white overflow-hidden cursor-crosshair" style="aspect-ratio: 16/9;">
+                            <img id="browserScreen" class="w-full h-full object-contain" onclick="clickBrowser(event)">
+                        </div>
+                        <input id="browserType" type="text" class="hacker-input w-full text-[10px] mt-2" placeholder="TYPE_HERE..." onkeypress="typeBrowser(event)">
+                    </div>
+                </div>
+            </div>
+
             <!-- Navigator -->
             <div class="hacker-border p-4">
                 <h3 class="text-[10px] font-bold opacity-60 mb-4 uppercase">Tactical Nav</h3>
@@ -222,6 +240,34 @@
             document.getElementById("nodeStatus").innerText = "OFFLINE";
             document.getElementById("nodeStatus").className = "text-red-500 font-bold";
         });
+
+        // Browser Proxy Handlers
+        function openBrowser() {
+            const url = document.getElementById('browserUrl').value;
+            if (!url) return;
+            document.getElementById('browserContainer').classList.remove('hidden');
+            document.getElementById('browserStatus').innerText = 'LOADING...';
+            socket.emit('browser-open', url);
+        }
+
+        socket.on('browser-update', (data) => {
+            document.getElementById('browserScreen').src = `data:image/png;base64,${data.screenshot}`;
+            document.getElementById('browserStatus').innerText = `CURRENT: ${data.url}`;
+        });
+
+        function clickBrowser(e) {
+            const rect = e.target.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (1280 / rect.width);
+            const y = (e.clientY - rect.top) * (720 / rect.height);
+            socket.emit('browser-click', { x, y });
+        }
+
+        function typeBrowser(e) {
+            if (e.key === 'Enter') {
+                socket.emit('browser-type', e.target.value);
+                e.target.value = '';
+            }
+        }
 
         // API Calls
         async function sendSingle(id) {

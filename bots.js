@@ -9,6 +9,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const puppeteer = require('puppeteer-core');
 
 const SERVER = 'eternel.eu';
 const PORT = 25565;
@@ -25,7 +26,11 @@ const SAVAGE_REPLIES = [
     (name) => `Your presence is like a bedrock block, ${name}: annoying, useless, and everyone wishes you weren't here.`,
     (name) => `Error 404: ${name}'s worth not found. Maybe try being less of a disappointment to your spawn point.`,
     (name) => `I'm a bot and even I can feel the secondhand embarrassment from your existence, ${name}.`,
-    (name) => `If stupidity was a potion effect, ${name}, you'd be a Level 255 splash bottle. Get lost.`
+    (name) => `If stupidity was a potion effect, ${name}, you'd be a Level 255 splash bottle. Get lost.`,
+    (name) => `I'd call you a 'noob', but that would be an insult to people who are actually trying, ${name}.`,
+    (name) => `Are you laggy or is your brain just running on a 1.12.2 server with 0.5 TPS, ${name}?`,
+    (name) => `I've seen better pathfinding in a chicken stuck in a hole than in your brain, ${name}.`,
+    (name) => `You're like a 'Bane of Arthropods' enchantment, ${name}—completely useless and nobody wants you.`
 ];
 
 const botList = new Array(BOTS.length).fill(null);
@@ -644,6 +649,58 @@ app.post('/bot/:id/stop', (req, res) => {
         return res.json({ success: true });
     }
     res.status(400).json({ error: 'Bot offline' });
+});
+
+// 🌐 BROWSER PROXY (Same IP Verification)
+let activeBrowser = null;
+let activePage = null;
+
+io.on('connection', (socket) => {
+    socket.on('browser-open', async (url) => {
+        try {
+            if (!activeBrowser) {
+                activeBrowser = await puppeteer.launch({
+                    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+                    headless: "new"
+                });
+            }
+            if (!activePage) {
+                activePage = await activeBrowser.newPage();
+                await activePage.setViewport({ width: 1280, height: 720 });
+            }
+            
+            await activePage.goto(url, { waitUntil: 'networkidle0' });
+            const screenshot = await activePage.screenshot({ encoding: 'base64' });
+            socket.emit('browser-update', { screenshot, url: activePage.url() });
+        } catch (err) {
+            addLog(`❌ BROWSER ERROR: ${err.message}`, 'SYSTEM');
+        }
+    });
+
+    socket.on('browser-click', async ({ x, y }) => {
+        if (activePage) {
+            try {
+                await activePage.mouse.click(x, y);
+                const screenshot = await activePage.screenshot({ encoding: 'base64' });
+                socket.emit('browser-update', { screenshot, url: activePage.url() });
+            } catch (err) {
+                addLog(`❌ CLICK ERROR: ${err.message}`, 'SYSTEM');
+            }
+        }
+    });
+
+    socket.on('browser-type', async (text) => {
+        if (activePage) {
+            try {
+                await activePage.keyboard.type(text);
+                const screenshot = await activePage.screenshot({ encoding: 'base64' });
+                socket.emit('browser-update', { screenshot, url: activePage.url() });
+            } catch (err) {
+                addLog(`❌ TYPE ERROR: ${err.message}`, 'SYSTEM');
+            }
+        }
+    });
 });
 
 const WEB_PORT = process.env.PORT || 3000;

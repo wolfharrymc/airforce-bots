@@ -8,19 +8,20 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user with ID 1000 for Hugging Face compatibility
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
+# Note: node:slim might already have a user with UID 1000 (node)
+RUN id -u 1000 >/dev/null 2>&1 || useradd -m -u 1000 user
+USER 1000
+ENV HOME=/home/node \
+    PATH=/home/node/.local/bin:$PATH
 
 WORKDIR $HOME/app
 
 # Copy package files with correct ownership
-COPY --chown=user package*.json ./
+COPY --chown=1000:1000 package*.json ./
 RUN npm install
 
 # Copy rest of the code with correct ownership
-COPY --chown=user . .
+COPY --chown=1000:1000 . .
 
 # HF Spaces port
 ENV PORT=7860

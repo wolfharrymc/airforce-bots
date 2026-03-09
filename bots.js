@@ -273,6 +273,10 @@ BOTS.forEach((name, i) => {
 });
 
 // 🌐 WEB API
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 app.get('/status', (req, res) => {
     const status = BOTS.map((name, i) => {
         const bot = botList[i];

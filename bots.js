@@ -30,6 +30,7 @@ const SAVAGE_REPLIES = [
 
 const botList = new Array(BOTS.length).fill(null);
 const manualDisconnect = new Array(BOTS.length).fill(false);
+const verifiedStatus = new Array(BOTS.length).fill(false);
 let alive = 0;
 const systemLogs = [];
 
@@ -65,7 +66,7 @@ function broadcastStatus() {
             position: pos,
             health: bot?.health || 0,
             food: bot?.food || 0,
-            task: bot?.currentTask || 'IDLE',
+            task: bot?.currentTask || (verifiedStatus[i] ? 'IDLE' : 'VERIFYING'),
             isFollowing: !!bot?.pathfinder?.goal,
             manual: manualDisconnect[i]
         };
@@ -76,14 +77,14 @@ function broadcastStatus() {
 setInterval(broadcastStatus, 1000);
 
 function loginBot(name, id) {
-    console.log(`${id}. ${name} connecting`);
+    console.log(`${id}. ${name} connecting (Verified: ${verifiedStatus[id-1]})`);
     
     const bot = mineflayer.createBot({
         host: SERVER,
         port: PORT,
         username: name,
-        version: '1.20.1', // SPECIFY VERSION (Common for modern servers)
-        checkTimeoutInterval: 60000 // Increase timeout to 60s
+        version: '1.20.1', 
+        checkTimeoutInterval: 60000 
     });
 
     bot.loadPlugin(pathfinder);
@@ -92,11 +93,17 @@ function loginBot(name, id) {
     bot.loadPlugin(collectBlock);
     bot.loadPlugin(armorManager);
     
-    bot.currentTask = 'INITIALIZING';
-    botList[id-1] = bot;  // FIXED INDEX
+    bot.currentTask = verifiedStatus[id-1] ? 'INITIALIZING' : 'VERIFYING_ANTIBOT';
+    botList[id-1] = bot;  
     
     bot.on('spawn', () => {
-        // Wait 3 seconds after spawn to ensure bot is ready
+        // If not verified yet, DO NOT MOVE OR DO ANYTHING
+        if (!verifiedStatus[id-1]) {
+            addLog(`🛡️ ANTIBOT: Standing still for verification...`, name);
+            return;
+        }
+
+        // Normal activity AFTER verification
         setTimeout(() => {
             if (!bot.isAlive) {
                 bot.isAlive = true;
@@ -105,8 +112,6 @@ function loginBot(name, id) {
                 addLog(`✅ UNIT ONLINE`, name);
                 
                 const movements = new Movements(bot);
-                
-                // --- Tactical Mobility Optimization (Baritone-Style) ---
                 movements.canDig = true;
                 movements.allowParkour = true;
                 movements.allowSprinting = true;
@@ -114,21 +119,12 @@ function loginBot(name, id) {
                 movements.canPlaceOn = true;
                 movements.climb = true;
                 
-                // Allow scaffolding with any block in inventory
                 bot.on('inventoryUpdate', () => {
                     const scaf = bot.inventory.items().filter(i => i.name.includes('cobble') || i.name.includes('dirt') || i.name.includes('stone') || i.name.includes('wood')).map(i => i.type);
                     if (scaf.length > 0) movements.scafoldingBlocks = scaf;
                 });
                 
                 bot.pathfinder.setMovements(movements);
-                
-                // Meteor-like Auto-Armor and Auto-Tool are passive
-                // They work automatically once loaded.
-                
-                // Force the bot to look around to simulate activity
-                if (bot.entity) {
-                    bot.look(Math.random() * Math.PI * 2, 0);
-                }
             }
         }, 3000);
     });
@@ -250,17 +246,24 @@ function loginBot(name, id) {
         }
     });
     
-    bot.on('end', () => {
+    bot.on('end', (reason) => {
         if (bot.isAlive) {
             bot.isAlive = false;
             alive = Math.max(0, alive - 1);
         }
-        addLog(`❌ UNIT DISCONNECTED`, name);
+        addLog(`❌ UNIT DISCONNECTED: ${reason}`, name);
         
+        // AntiBot Logic: If we get kicked while not verified, assume it's the verification kick
+        if (!verifiedStatus[id-1]) {
+            addLog(`🛡️ ANTIBOT: Verification kick detected. Marking as verified.`, name);
+            verifiedStatus[id-1] = true;
+        }
+
         // Only auto-reconnect if NOT manually disconnected
         if (!manualDisconnect[id-1]) {
             // AntiBot bypass: Staggered reconnection with longer random delay
-            const retryDelay = 15000 + Math.random() * 15000; 
+            // If we just got verified, wait a bit longer before rejoining as "real" bot
+            const retryDelay = verifiedStatus[id-1] ? 30000 : (15000 + Math.random() * 15000); 
             setTimeout(() => loginBot(name, id), retryDelay);
         }
     });
@@ -270,7 +273,7 @@ function loginBot(name, id) {
 BOTS.forEach((name, i) => {
     setTimeout(() => {
         loginBot(name, i + 1);
-    }, i * 15000); // 15 second delay between each bot to bypass AntiBot
+    }, i * 60000); // 60 second delay between each bot to be extremely safe with AntiBot
 });
 
 // 🌐 WEB API

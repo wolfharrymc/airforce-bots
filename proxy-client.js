@@ -1,58 +1,63 @@
-const { io } = require("socket.io-client");
+const WebSocket = require("ws");
 const net = require("net");
 
 // CONFIGURATION
-const REMOTE_URL = "https://wolfharrymc-airforce-bots.hf.space";
+const REMOTE_URL = "wss://wolfharrymc-airforce-bots.hf.space/proxy";
 const LOCAL_PORT = 25565;
 
-console.log(`🚀 STARTING PROXY TUNNEL...`);
+console.log(`🚀 STARTING TURBO PROXY TUNNEL...`);
 console.log(`🔗 REMOTE: ${REMOTE_URL}`);
 console.log(`🏠 LOCAL: localhost:${LOCAL_PORT}`);
-
-const socket = io(REMOTE_URL);
 
 const server = net.createServer((localSocket) => {
     console.log("🔌 LOCAL CLIENT CONNECTED");
     
-    // Tell the remote server we want to connect to Minecraft (25565)
-    socket.emit('proxy-connect', { host: 'eternel.eu', port: 25565 });
+    const ws = new WebSocket(REMOTE_URL);
+
+    ws.on('open', () => {
+        // Step 1: Send configuration
+        ws.send(JSON.stringify({ host: 'eternel.eu', port: 25565 }));
+    });
+
+    ws.on('message', (data) => {
+        // Check if it's a JSON status message or raw binary
+        try {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'connected') {
+                console.log("✅ TUNNEL ESTABLISHED TO ETERNEL.EU");
+                return;
+            }
+            if (msg.type === 'error') {
+                console.error("❌ REMOTE ERROR:", msg.message);
+                localSocket.end();
+                return;
+            }
+        } catch (e) {
+            // It's raw binary data (Minecraft packet)
+            if (localSocket.writable) localSocket.write(data);
+        }
+    });
 
     localSocket.on('data', (data) => {
-        socket.emit('proxy-input', data);
+        if (ws.readyState === WebSocket.OPEN) ws.send(data);
     });
 
-    socket.on('proxy-data', (data) => {
-        localSocket.write(data);
-    });
-
-    socket.on('proxy-connected', () => {
-        console.log("✅ TUNNEL ESTABLISHED TO ETERNEL.EU");
-    });
-
-    socket.on('proxy-error', (err) => {
-        console.error("❌ PROXY ERROR:", err);
+    ws.on('close', () => {
+        console.log("🏁 REMOTE CONNECTION CLOSED");
         localSocket.end();
     });
 
-    socket.on('proxy-end', () => {
-        console.log("🏁 REMOTE CONNECTION CLOSED");
+    ws.on('error', (err) => {
+        console.error("❌ WS ERROR:", err.message);
         localSocket.end();
     });
 
     localSocket.on('end', () => {
         console.log("🔌 LOCAL CLIENT DISCONNECTED");
-        socket.off('proxy-data');
+        ws.close();
     });
 });
 
 server.listen(LOCAL_PORT, () => {
-    console.log(`\n✨ READY! JOIN IN MINECRAFT AT: localhost:${LOCAL_PORT}\n`);
-});
-
-socket.on("connect", () => {
-    console.log("📡 CONNECTED TO HUGGING FACE");
-});
-
-socket.on("connect_error", (err) => {
-    console.error("❌ CONNECTION FAILED:", err.message);
+    console.log(`\n✨ TURBO READY! JOIN IN MINECRAFT AT: localhost:${LOCAL_PORT}\n`);
 });

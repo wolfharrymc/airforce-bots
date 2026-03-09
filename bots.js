@@ -8,6 +8,7 @@ const armorManager = require('mineflayer-armor-manager');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { WebSocketServer } = require('ws');
 const path = require('path');
 const net = require('net');
 
@@ -651,33 +652,55 @@ app.post('/bot/:id/stop', (req, res) => {
     res.status(400).json({ error: 'Bot offline' });
 });
 
-// 🌐 SOCKS5 PROXY OVER WEBSOCKET (Same IP Verification)
-// This allows you to connect your local Minecraft client through the Hugging Face IP
-io.on('connection', (socket) => {
-    socket.on('proxy-connect', ({ host, port }) => {
-        const client = net.connect(port, host, () => {
-            socket.emit('proxy-connected');
-        });
+// 🌐 TURBO PROXY OVER WEBSOCKET (Same IP Verification)
+// This uses raw WebSockets for maximum speed to prevent Minecraft timeouts
+const wss = new WebSocketServer({ noServer: true });
 
-        client.on('data', (data) => {
-            socket.emit('proxy-data', data);
+server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
+    if (pathname === '/proxy') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
         });
+    }
+});
 
-        client.on('end', () => {
-            socket.emit('proxy-end');
-        });
+wss.on('connection', (ws) => {
+    let client = null;
 
-        client.on('error', (err) => {
-            socket.emit('proxy-error', err.message);
-        });
+    ws.on('message', (message) => {
+        // First message is expected to be {host, port}
+        if (!client) {
+            try {
+                const config = JSON.parse(message.toString());
+                client = net.connect(config.port, config.host, () => {
+                    ws.send(JSON.stringify({ type: 'connected' }));
+                });
 
-        socket.on('proxy-input', (data) => {
-            if (client.writable) client.write(data);
-        });
+                client.on('data', (data) => {
+                    if (ws.readyState === ws.OPEN) ws.send(data);
+                });
 
-        socket.on('disconnect', () => {
-            client.end();
-        });
+                client.on('end', () => {
+                    ws.close();
+                });
+
+                client.on('error', (err) => {
+                    ws.send(JSON.stringify({ type: 'error', message: err.message }));
+                    ws.close();
+                });
+            } catch (e) {
+                ws.close();
+            }
+            return;
+        }
+
+        // Subsequent messages are raw TCP data
+        if (client.writable) client.write(message);
+    });
+
+    ws.on('close', () => {
+        if (client) client.end();
     });
 });
 
@@ -685,4 +708,9 @@ const WEB_PORT = process.env.PORT || 3000;
 server.listen(WEB_PORT, () => {
     console.log(`🌐 DASHBOARD: http://localhost:${WEB_PORT}`);
     console.log('📊 WebSocket Stream Active');
+    
+    // Log the Hugging Face IP for the user
+    require('http').get('http://ifconfig.me/ip', (res) => {
+        res.on('data', (ip) => console.log(`🌍 HUGGING FACE IP: ${ip.toString().trim()}`));
+    });
 });
